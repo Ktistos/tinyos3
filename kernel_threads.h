@@ -31,4 +31,9 @@ typedef struct process_thread_control_block {
 
 
 
+/**
+Initiliazing and returning a new ptcb.
 
+Not responsible for the linking between pcb,tcb and ptcb blocks
+ */
+PTCB* initialize_PTCB(Task call, int argl, void * args );

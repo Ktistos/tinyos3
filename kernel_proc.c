@@ -3,6 +3,7 @@
 #include "kernel_cc.h"
 #include "kernel_proc.h"
 #include "kernel_streams.h"
+#include "kernel_threads.h"
 
 
 /* 
@@ -180,7 +181,20 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     the initialization of the PCB.
    */
   if(call != NULL) {
-    newproc->main_thread = spawn_thread(newproc, start_main_thread);
+    TCB* main_tcb = spawn_thread(newproc, start_main_thread);
+    newproc->main_thread = main_tcb;
+
+    //aquiring the newly made ptcb 
+    PTCB* ptcb=initialize_PTCB(call,argl,args);
+
+    //linking ptcb with tcb
+    ptcb->tcb=main_tcb;
+    main_tcb->ptcb =ptcb;
+
+    //linking ptcb to pcb by pushing it in the list of ptcbs of the current process
+    rlist_push_front(&newproc->ptcb_list, &ptcb->ptcb_list_node);
+    newproc->thread_count++;
+  
     wakeup(newproc->main_thread);
   }
 
