@@ -48,6 +48,7 @@ typedef struct process_control_block {
 
   rlnode children_list;   /**< @brief List of children */
   rlnode exited_list;     /**< @brief List of exited children */
+  rlnode ptcb_list;
 
   rlnode children_node;   /**< @brief Intrusive node for @c children_list */
   rlnode exited_node;     /**< @brief Intrusive node for @c exited_list */
@@ -59,6 +60,8 @@ typedef struct process_control_block {
                              @c WaitChild() */
 
   FCB* FIDT[MAX_FILEID];  /**< @brief The fileid table of the process */
+
+  int thread_count;
 
 } PCB;
 
