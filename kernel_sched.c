@@ -156,7 +156,7 @@ void release_TCB(TCB* tcb)
 #endif
 
 	free_thread(tcb, THREAD_SIZE);
-
+	
 	Mutex_Lock(&active_threads_spinlock);
 	active_threads--;
 	Mutex_Unlock(&active_threads_spinlock);

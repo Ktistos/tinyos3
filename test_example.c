@@ -5,15 +5,7 @@
 
 BARE_TEST(my_test, "This is a silly test")
 {
-  PTCB ptcb_list[10];
-  rlnode list;
-  rlnode_new(&list);
-  for(int i=0; i<10;i++){
-    rlnode* ptcb=&(ptcb_list[i].ptcb_list_node);
-    rlnode_new(ptcb);
-    rlist_push_front(&list,ptcb);
-  }
-  ASSERT(rlist_len(&list)==10);
+  
   
 
 }

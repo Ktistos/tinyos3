@@ -3,9 +3,20 @@
 #include "kernel_sched.h"
 #include "kernel_proc.h"
 #include "util.h"
+#include "kernel_cc.h"
+#include "kernel_streams.h"
 
 
 #define PTCB_SIZE (sizeof(PTCB))
+
+
+int check_valid_Tid(PTCB* ptcb)
+{
+    PCB* curproc=CURPROC;
+    return rlist_find(&curproc->ptcb_list,ptcb,NULL)!=NULL;
+}
+
+
 
 PTCB* initialize_PTCB(Task call, int argl, void * args )
 {
@@ -22,6 +33,7 @@ PTCB* initialize_PTCB(Task call, int argl, void * args )
   ptcb->detached=0;
   ptcb->refcount=0;
 
+  // Copy the arguments to new storage
   ptcb->argl=argl;
   if(args!=NULL) {
     ptcb->args = malloc(argl);
@@ -33,7 +45,20 @@ PTCB* initialize_PTCB(Task call, int argl, void * args )
   return ptcb;
 }
 
-void start_thread(){
+void release_PTCB(PTCB* ptcb)
+{
+  PCB* curproc=CURPROC;
+  rlist_remove(&ptcb->ptcb_list_node);
+  curproc->thread_count--;
+  if(curproc->args) {
+      free(curproc->args);
+      curproc->args = NULL;
+    }
+  free(ptcb);
+}
+
+void start_thread()
+{
 
   int thread_exitval;
 
@@ -87,7 +112,46 @@ Tid_t sys_ThreadSelf()
   */
 int sys_ThreadJoin(Tid_t tid, int* exitval)
 {
-	return -1;
+  PTCB* ptcb=(PTCB*) tid;
+
+  /**Checking all the possible errors
+  *- there is no thread with the given tid in this process.
+  *- the tid corresponds to the current thread.
+  *- the tid corresponds to a detached thread. 
+  */
+  if(!check_valid_Tid(ptcb)||(sys_ThreadSelf()==tid)||ptcb->detached)
+    return -1;
+  /**
+   * The loop will break when the threads that called kernel_wait
+   * get broadcasted either by ThreadExit or ThreadDetach.
+   * 
+   */
+  while (!ptcb->exited && !ptcb->detached){
+    //incrementing the number of threads that wait the specified tid
+    ptcb->refcount++;
+    kernel_wait(&ptcb->exit_cv, SCHED_USER);
+    //decrementing that number since a thread wakes up
+    ptcb->refcount--;
+  }
+  /**
+   * Returning error code if the thread woke up by ThreadDetach since the thread 
+   * that it had to join is now detached. 
+   */
+  if(ptcb->detached!=1)
+    //retrieve the exitval of the exited thread 
+    *exitval=ptcb->exitval;
+  else
+    return -1;
+
+  /*If the newly awoken thread is the last or the only one 
+  * that was waiting for the tid to exit,then free then release its ptcb.
+  */
+  if(ptcb->refcount<1)
+        release_PTCB(ptcb);
+    
+
+
+  return 0;
 }
 
 /**
@@ -95,7 +159,20 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   */
 int sys_ThreadDetach(Tid_t tid)
 {
-	return -1;
+  PTCB* ptcb=(PTCB*) tid;
+  //check whether tid exits in pcb list of ptcbs or ptcb is exited
+	if(!check_valid_Tid(ptcb)||ptcb->exited)
+    return -1;
+
+  //flag ptcb as detached
+  ptcb->detached=1;
+  //reset the refcount since no thread is going to join the detached one
+  ptcb->refcount=0;
+
+  //wakeup all the threads that might have joined this thread before it became detached
+  kernel_broadcast(&ptcb->exit_cv);
+
+  return 0;
 }
 
 /**
@@ -107,6 +184,7 @@ void sys_ThreadExit(int exitval)
   //condition start
   PCB *curproc = CURPROC;  /* cache for efficiency */
 
+    if(curproc->thread_count==1){
     /* Do all the other cleanup we want here, close files etc. */
     if(curproc->args) {
       free(curproc->args);
@@ -150,9 +228,19 @@ void sys_ThreadExit(int exitval)
     curproc->pstate = ZOMBIE;
     curproc->exitval = exitval;
 
+    }
 
-  //condition end
+    TCB* curthread=CURTHREAD;
 
+    curthread->ptcb->exitval=exitval;
+    curthread->ptcb->exited=1;
+    kernel_broadcast(&curthread->ptcb->exit_cv);
+
+
+    if(curthread->ptcb->refcount<1)
+      release_PTCB(curthread->ptcb);
+    
+  
 
   /* Bye-bye cruel world */
   kernel_sleep(EXITED, SCHED_USER);
