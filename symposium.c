@@ -218,7 +218,7 @@ int SymposiumOfThreads(int argl, void* args)
 	/* Execute philosophers */
 	Tid_t thread[symp->N];
 	for(int i=0;i<N;i++) {
-		thread[i] = CreateThread(PhilosopherThread, i, &S);//afto tha paei sto argl
+		thread[i] = CreateThread(PhilosopherThread, i, &S);
 	}  
 
 	/* Wait for philosophers to exit */  

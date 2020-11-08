@@ -92,7 +92,7 @@
 
 	- The @c assert(...)  macro from the standard library. Use this to check conditions
 	that, if they fail, will cause the rest of the test to be skipped. For example,
-	when we call a routine which returns a pointer to a new object, in order to test it,
+	when we call a routine which returns a pointer to(gdb) n a new object, in order to test it,
 	we would probably want to skip the rest of the test if the pointer returned is null.
 
 	- The @c ASSERT(...)  macro is similar to the standard @c assert, but it does not
