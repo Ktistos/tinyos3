@@ -150,7 +150,6 @@ void SymposiumTable_destroy(SymposiumTable* table)
 }
 
 
-
 typedef struct { int i; SymposiumTable* S; } philosopher_args;
 
 /* Philosopher process */
@@ -196,6 +195,8 @@ int SymposiumOfProcesses(int argl, void* args)
 
 int PhilosopherThread(int i, void* symp)
 {
+  int bisias;
+  bisias=0;
 	SymposiumTable_philosopher((SymposiumTable*) symp, i);
 	return 0;
 }
@@ -217,7 +218,7 @@ int SymposiumOfThreads(int argl, void* args)
 	/* Execute philosophers */
 	Tid_t thread[symp->N];
 	for(int i=0;i<N;i++) {
-		thread[i] = CreateThread(PhilosopherThread, i, &S);
+		thread[i] = CreateThread(PhilosopherThread, i, &S);//afto tha paei sto argl
 	}  
 
 	/* Wait for philosophers to exit */  

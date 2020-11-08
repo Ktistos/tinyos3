@@ -36,8 +36,9 @@ PTCB* initialize_PTCB(Task call, int argl, void * args )
   // Copy the arguments to new storage
   ptcb->argl=argl;
   if(args!=NULL) {
-    ptcb->args = malloc(argl);
-    memcpy(ptcb->args, args, argl);
+    ptcb->args = xmalloc(sizeof(args));
+    ptcb->args=args;
+
   }
   else
     ptcb->args=NULL;
@@ -50,9 +51,9 @@ void release_PTCB(PTCB* ptcb)
   PCB* curproc=CURPROC;
   rlist_remove(&ptcb->ptcb_list_node);
   curproc->thread_count--;
-  if(curproc->args) {
-      free(curproc->args);
-      curproc->args = NULL;
+  if(ptcb->args) {
+      //free(ptcb->args);
+      ptcb->args = NULL;
     }
   free(ptcb);
 }
@@ -137,7 +138,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
    * Returning error code if the thread woke up by ThreadDetach since the thread 
    * that it had to join is now detached. 
    */
-  if(ptcb->detached!=1)
+  if(ptcb->detached!=1&&exitval!=NULL)
     //retrieve the exitval of the exited thread 
     *exitval=ptcb->exitval;
   else
@@ -183,8 +184,8 @@ void sys_ThreadExit(int exitval)
 
   //condition start
   PCB *curproc = CURPROC;  /* cache for efficiency */
-
     if(curproc->thread_count==1){
+
     /* Do all the other cleanup we want here, close files etc. */
     if(curproc->args) {
       free(curproc->args);
@@ -220,11 +221,12 @@ void sys_ThreadExit(int exitval)
       rlist_push_front(& curproc->parent->exited_list, &curproc->exited_node);
       kernel_broadcast(& curproc->parent->child_exit);
     }
-
+   
     /* Disconnect my main_thread */
     curproc->main_thread = NULL;
 
     /* Now, mark the process as exited. */
+    
     curproc->pstate = ZOMBIE;
     curproc->exitval = exitval;
 

@@ -169,7 +169,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
   /* Copy the arguments to new storage, owned by the new process */
   newproc->argl = argl;
   if(args!=NULL) {
-    newproc->args = malloc(argl);
+    newproc->args = malloc(argl); //magkes allo einai afto
     memcpy(newproc->args, args, argl);
   }
   else
@@ -192,7 +192,7 @@ Pid_t sys_Exec(Task call, int argl, void* args)
     main_tcb->ptcb =ptcb;
 
     //linking ptcb to pcb by pushing it in the list of ptcbs of the current process
-    rlist_push_front(&newproc->ptcb_list, &ptcb->ptcb_list_node);
+    rlist_push_front(& newproc->ptcb_list, & ptcb->ptcb_list_node);
     newproc->thread_count++;
   
     wakeup(newproc->main_thread);
@@ -295,8 +295,6 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
   }
 
 }
-
-
 void sys_Exit(int exitval)
 {
   /* Right here, we must check that we are not the boot task. If we are, 
@@ -304,8 +302,9 @@ void sys_Exit(int exitval)
   if(sys_GetPid()==1) {
     while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
   }
-
+  CURPROC->exitval=exitval;
   sys_ThreadExit(exitval);
+  
 }
 
 
