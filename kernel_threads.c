@@ -138,21 +138,19 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
    * Returning error code if the thread woke up by ThreadDetach since the thread 
    * that it had to join is now detached. 
    */
-  if(ptcb->detached!=1&&exitval!=NULL){
+  if(ptcb->detached!=1){
     //retrieve the exitval of the exited thread 
-    *exitval=ptcb->exitval;
-    if(ptcb->refcount<1)
-        release_PTCB(ptcb);
-}
-  else{
-    if(ptcb->refcount<1)
-        release_PTCB(ptcb);
+    if(exitval!=NULL)
+      *exitval=ptcb->exitval;
+    }
+  else
     return -1;
-  }
+  
   /*If the newly awoken thread is the last or the only one 
   * that was waiting for the tid to exit,then free then release its ptcb.
   */
-  
+  if(ptcb->refcount<1)
+        release_PTCB(ptcb);
     
 
 
