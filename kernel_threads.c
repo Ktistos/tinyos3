@@ -105,7 +105,7 @@ return NOTHREAD;
  */
 Tid_t sys_ThreadSelf()
 {
-	return (Tid_t) CURTHREAD;
+	return (Tid_t) CURTHREAD->ptcb;
 }
 
 /**
