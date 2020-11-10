@@ -1029,15 +1029,16 @@ BOOT_TEST(test_detach_after_join,
 {
 	/* A thread to be joined */
 	int joined_thread(int argl, void* args) {
-		sleep_thread(1);
+		int poutsa=0;
+		sleep_thread(10);
 		ThreadDetach(ThreadSelf());
 		return 5213;
 	}
-
+	
 	Tid_t joined_tid = CreateThread(joined_thread, 0, NULL);
 
 	int joiner_thread(int argl, void* args) {
-		int retval;
+		int retval;	
 		int rc = ThreadJoin(joined_tid,&retval);
 		ASSERT(rc==-1);
 		ASSERT(ThreadDetach(ThreadSelf()));
@@ -1058,7 +1059,7 @@ BOOT_TEST(test_exit_many_threads,
 {
 
 	int task(int argl, void* args) {
-		fibo(45);
+		fibo(25);
 		return 2;
 	}
 
@@ -1066,7 +1067,7 @@ BOOT_TEST(test_exit_many_threads,
 		for(int i=0;i<5;i++)
 			ASSERT(CreateThread(task, 0, NULL) != NOTHREAD);
 
-		fibo(35);
+		fibo(5);
 		return 0;
 	}
 
@@ -1102,7 +1103,9 @@ BOOT_TEST(test_cyclic_joins,
 	Tid_t tids[N];
 
 	int join_thread(int argl, void* args) {
+		fprintf(stderr,"eimai to created thread %d\n", (argl-1));
 		BarrierSync(&B, N+1);
+		fprintf(stderr,"perasa to barier\n");
 		ThreadJoin(tids[argl], NULL);
 		return argl;
 	}
@@ -1112,7 +1115,10 @@ BOOT_TEST(test_cyclic_joins,
 		tids[i] = CreateThread(join_thread, (i+1)%N, NULL);
 		assert(tids[i]!=NOTHREAD); /* small assert! do not proceed unless threads are created! */
 	}
+	fprintf(stderr,"main thread prin to barrier sync\n");
 	/* allow threads to join */
+
+	Mutex_Unlock(&B.mx);
 	BarrierSync(&B, N+1);
 	/* Wait for threads to proceed */
 	sleep_thread(1);

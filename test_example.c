@@ -6,7 +6,19 @@
 BARE_TEST(my_test, "This is a silly test")
 {
   
+  rlnode list ;
+  rlnode_init(&list,NULL);
+  rlnode nodes[10];
+  for(int i=0; i<10;i++){
+    rlnode_init(&nodes[i],NULL);
+    rlist_push_front(&list,&nodes[i]);
+  }
+  while (!is_rlist_empty(&list))
+  {
+    rlist_pop_front(&list);
+  }
   
+  assert(is_rlist_empty(&list));
 
 }
 

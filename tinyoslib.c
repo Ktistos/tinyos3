@@ -173,7 +173,7 @@ void BarrierSync(barrier* bar, unsigned int n)
 {
 	assert(n>0);
 	Mutex_Lock(& bar->mx);
-
+	fprintf(stderr,"poutsa\n");
 	int epoch = bar->epoch;
 	assert(bar->count < n);
 
