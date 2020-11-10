@@ -74,7 +74,7 @@ void clean_process_PTCBs()
 
 
 
-void process_cleanup(int exitval)
+void process_cleanup()
 {
 
 
@@ -123,7 +123,7 @@ void process_cleanup(int exitval)
   curproc->main_thread = NULL;
   /* Now, mark the process as exited. */
   curproc->pstate = ZOMBIE;
-  curproc->exitval = exitval;  
+
 }
 
 void start_thread()
@@ -264,8 +264,9 @@ void sys_ThreadExit(int exitval)
    /* cache for efficiency */
 
   PCB* curproc=CURPROC;
+
   if(curproc->thread_count<=1)
-    process_cleanup(exitval);
+    process_cleanup();
     
   /* Bye-bye cruel world */
   
