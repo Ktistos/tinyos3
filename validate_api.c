@@ -1029,7 +1029,7 @@ BOOT_TEST(test_detach_after_join,
 {
 	/* A thread to be joined */
 	int joined_thread(int argl, void* args) {
-		int poutsa=0;
+
 		sleep_thread(10);
 		ThreadDetach(ThreadSelf());
 		return 5213;
