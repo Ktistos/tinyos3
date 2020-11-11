@@ -127,6 +127,7 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 	tcb->rts = QUANTUM;
 	tcb->last_cause = SCHED_IDLE;
 	tcb->curr_cause = SCHED_IDLE;
+	tcb->priority=0;
 
 	/* Compute the stack segment address and size */
 	void* sp = ((void*)tcb) + THREAD_TCB_SIZE;
@@ -184,8 +185,8 @@ CCB cctx[MAX_CORES];
 
   Both of these structures are protected by @c sched_spinlock.
 */
-
-rlnode SCHED; /* The scheduler queue */
+int yield_counter=0;
+rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
 
@@ -197,11 +198,57 @@ void ici_handler()
 { /* noop for now... */
 }
 
+
+
+/***/
+
+static int check_for_boost()
+{
+	yield_counter++;
+	if(yield_counter==BOOST_PERIOD){
+		yield_counter=0;
+		return 1;
+	}
+
+	return 0;
+}
+
+static void change_queue_priority(rlnode * sched_queue)
+{
+	for(int i=0;i<rlist_len(sched_queue);i++)
+	{
+		rlnode * tcb_node = rlist_pop_front(sched_queue);
+		tcb_node->tcb->priority++;
+		rlist_push_back(sched_queue,tcb_node);
+	}
+	
+}
+
+static rlnode * sched_queue_pop()
+{
+	for(int i=PRIORITY_QUEUES-1; i>=0; i--)
+		if(!is_rlist_empty(&SCHED[i]))
+			return rlist_pop_front(&SCHED[i]);
+
+	return &SCHED[0];
+}
+
+static void sched_boost()
+{
+	for(int i=0; i<PRIORITY_QUEUES-1; i++){
+		change_queue_priority(&SCHED[i]);
+		rlist_append(&SCHED[i+1],&SCHED[i]);
+	}
+} 
+
+
 /*
   Possibly add TCB to the scheduler timeout list.
 
   *** MUST BE CALLED WITH sched_spinlock HELD ***
 */
+
+
 static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 {
 	if (timeout != NO_TIMEOUT) {
@@ -228,7 +275,7 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 static void sched_queue_add(TCB* tcb)
 {
 	/* Insert at the end of the scheduling list */
-	rlist_push_back(&SCHED, &tcb->sched_node);
+	rlist_push_back(&SCHED[tcb->priority], &tcb->sched_node);
 
 	/* Restart possibly halted cores */
 	cpu_core_restart_one();
@@ -287,7 +334,7 @@ static void sched_wakeup_expired_timeouts()
 static TCB* sched_queue_select(TCB* current)
 {
 	/* Get the head of the SCHED list */
-	rlnode* sel = rlist_pop_front(&SCHED);
+	rlnode* sel = sched_queue_pop();
 
 	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
 
@@ -298,6 +345,37 @@ static TCB* sched_queue_select(TCB* current)
 
 	return next_thread;
 }
+
+/***/
+static int set_next_priority(TCB* current_thread)
+{
+	int current_priority=current_thread->priority;
+
+	switch (current_thread->curr_cause) {
+		case SCHED_QUANTUM:
+			if(current_priority>0)
+				current_priority--;
+			break;
+		case SCHED_IO:
+			//check later just for priority++;
+			current_priority=PRIORITY_QUEUES-1;
+			break;
+		case SCHED_MUTEX:
+			if(current_thread->last_cause==SCHED_MUTEX)
+				if(current_priority>0)
+					current_priority--;
+			break;
+		case SCHED_USER:
+			break;
+		case SCHED_IDLE:
+			current_priority=PRIORITY_QUEUES-1;
+			break;
+		default:
+			assert(0); /* prev->state should not be INIT or RUNNING ! */
+		}
+		return current_priority;
+}
+
 
 /*
   Make the process ready.
@@ -383,7 +461,7 @@ void yield(enum SCHED_CAUSE cause)
 	current->rts = remaining;
 	current->last_cause = current->curr_cause;
 	current->curr_cause = cause;
-
+	current->priority=set_next_priority(current);
 	/* Wake up threads whose sleep timeout has expired */
 	sched_wakeup_expired_timeouts();
 
@@ -391,6 +469,8 @@ void yield(enum SCHED_CAUSE cause)
 	TCB* next = sched_queue_select(current);
 	assert(next != NULL);
 
+	if(check_for_boost())
+		sched_boost();
 	/* Save the current TCB for the gain phase */
 	CURCORE.previous_thread = current;
 
@@ -481,7 +561,8 @@ static void idle_thread()
  */
 void initialize_scheduler()
 {
-	rlnode_init(&SCHED, NULL);
+	for(int i=0;i<PRIORITY_QUEUES;i++)
+		rlnode_init(&SCHED[i], NULL);
 	rlnode_init(&TIMEOUT_LIST, NULL);
 }
 

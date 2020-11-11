@@ -1117,7 +1117,7 @@ BOOT_TEST(test_detach_main_thread,
 		mttid = ThreadSelf();
 		ASSERT(CreateThread(notmain_thread,0,NULL)!=NOTHREAD);
 		sleep_thread(1);
-		ThreadDetach(ThreadSelf());
+		ASSERT(ThreadDetach(ThreadSelf())==0);
 		return 42;
 	}
 
@@ -1260,13 +1260,7 @@ BOOT_TEST(test_cyclic_joins,
 
 	int join_thread(int argl, void* args) {
 		BarrierSync(&B, N+1);
-		fprintf(stderr,"Im thread %d trying to join thread %d\n",(argl-1),argl);
-		
-		int join=ThreadJoin(tids[argl], NULL);
-		fprintf(stderr,"thread %d woke up\n",(argl-1));
-		if(join)
-			fprintf(stderr,"The thread that thread %d joined is detached\n",(argl-1));
-			
+		ThreadJoin(tids[argl], NULL);
 		return argl;
 	}
 
@@ -1278,22 +1272,16 @@ BOOT_TEST(test_cyclic_joins,
 	/* allow threads to join */
 	BarrierSync(&B, N+1);
 	/* Wait for threads to proceed */
-	fprintf(stderr,"Main thread sleeps.\n");
 	sleep_thread(1);
-	fprintf(stderr,"Main thread wakes up.\n");
 	/* Now, threads are in deadlock! To break the deadlock,
 	   detach thread 0. */
 	ThreadDetach(tids[0]);
 
-
 	sleep_thread(1);
-	fprintf(stderr,"Detaching thread 0.\n");
 	/* To make sure that other threads escape deadlock, join them! */
-	for(unsigned int i=1; i<N; i++){
-		int join=ThreadJoin(tids[i], NULL);
-		fprintf(stderr,"joining thread %d.\n",i);
-		ASSERT(join);	
-	}
+	for(unsigned int i=1; i<N; i++)
+		ASSERT(ThreadJoin(tids[i], NULL));	
+
 	return 0;
 }
 

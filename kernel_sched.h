@@ -130,6 +130,8 @@ typedef struct thread_control_block {
 	enum SCHED_CAUSE curr_cause; /**< @brief The endcause for the current time-slice */
 	enum SCHED_CAUSE last_cause; /**< @brief The endcause for the last time-slice */
 
+  int priority;/***/
+
 } TCB;
 
 /** @brief Thread stack size.
@@ -143,6 +145,12 @@ typedef struct thread_control_block {
  *      Scheduler
  *
  ************************/
+
+/**Number of priority queues*/
+#define PRIORITY_QUEUES 100
+
+/**Number of yields called before each boost occurs*/
+#define BOOST_PERIOD 1200
 
 /** @brief Core control block.
 
