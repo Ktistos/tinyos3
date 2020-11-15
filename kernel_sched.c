@@ -54,8 +54,17 @@ Mutex active_threads_spinlock = MUTEX_INIT;
 
 #define THREAD_SIZE (THREAD_TCB_SIZE + THREAD_STACK_SIZE)
 
+
+/**Number of priority queues*/
+#define PRIORITY_QUEUES 500
+
+/**Number of yields called before each boost occurs*/
+#define BOOST_PERIOD 5000
+
 //#define MMAPPED_THREAD_MEM
 #ifdef MMAPPED_THREAD_MEM
+
+
 
 /*
   Use mmap to allocate a thread. A more detailed implementation can allocate a
@@ -127,7 +136,7 @@ TCB* spawn_thread(PCB* pcb, void (*func)())
 	tcb->rts = QUANTUM;
 	tcb->last_cause = SCHED_IDLE;
 	tcb->curr_cause = SCHED_IDLE;
-	tcb->priority=0;
+	tcb->priority=PRIORITY_QUEUES/2;
 
 	/* Compute the stack segment address and size */
 	void* sp = ((void*)tcb) + THREAD_TCB_SIZE;
@@ -177,15 +186,17 @@ void release_TCB(TCB* tcb)
 CCB cctx[MAX_CORES];
 
 /*
-  The scheduler queue is implemented as a doubly linked list. The
-  head and tail of this list are stored in  SCHED.
+  Since the scheduler is based on MLFQ , it is consisted of many queues.
+  Each queue is implemented as a doubly linked list. The
+  head and tail of this list are stored in  SCHED[i].
 
   Also, the scheduler contains a linked list of all the sleeping
   threads with a timeout.
 
   Both of these structures are protected by @c sched_spinlock.
+
 */
-int yield_counter=0;
+int yield_counter=0;/*The number of yields that have been called since the last boost*/
 rlnode SCHED[PRIORITY_QUEUES]; /* The scheduler queue */
 rlnode TIMEOUT_LIST; /* The list of threads with a timeout */
 Mutex sched_spinlock = MUTEX_INIT; /* spinlock for scheduler queue */
@@ -200,8 +211,11 @@ void ici_handler()
 
 
 
-/***/
-
+/*
+*This functions checks whether it's the right time to boost or not.
+*When the number of yields called matches the BOOST_PERIOD then we need to boost the scheduler queues.
+*Returns 1 if it is the right time, 0 if not.
+*/
 static int check_for_boost()
 {
 	yield_counter++;
@@ -213,6 +227,10 @@ static int check_for_boost()
 	return 0;
 }
 
+/*
+*This is a helper function to use when boosting.
+*It changes the priority of each tcb contained in sched_queue and increments it.
+*/
 static void change_queue_priority(rlnode * sched_queue)
 {
 	for(int i=0;i<rlist_len(sched_queue);i++)
@@ -224,6 +242,11 @@ static void change_queue_priority(rlnode * sched_queue)
 	
 }
 
+/*
+*This function is used to get the next tcb to run.
+*It pops the first element from the highest priority queue that is not empty and returns it.
+*If all the queues are empty it returns the address of the lowest priority queue.
+*/
 static rlnode * sched_queue_pop()
 {
 	for(int i=PRIORITY_QUEUES-1; i>=0; i--)
@@ -233,6 +256,11 @@ static rlnode * sched_queue_pop()
 	return &SCHED[0];
 }
 
+/*
+*This function is used to implement the boost functionality of the scheduler.
+*For every priority queue (except the highest priority queue), we change the priority of its elements 
+*and then append them to the next higher priority.
+*/
 static void sched_boost()
 {
 	for(int i=0; i<PRIORITY_QUEUES-1; i++){
@@ -274,7 +302,7 @@ static void sched_register_timeout(TCB* tcb, TimerDuration timeout)
 */
 static void sched_queue_add(TCB* tcb)
 {
-	/* Insert at the end of the scheduling list */
+	/* Insert the tcb at its corresponding priority queue */
 	rlist_push_back(&SCHED[tcb->priority], &tcb->sched_node);
 
 	/* Restart possibly halted cores */
@@ -333,7 +361,7 @@ static void sched_wakeup_expired_timeouts()
 */
 static TCB* sched_queue_select(TCB* current)
 {
-	/* Get the head of the SCHED list */
+	/* Get the head of the highest priority queue list */
 	rlnode* sel = sched_queue_pop();
 
 	TCB* next_thread = sel->tcb; /* When the list is empty, this is NULL */
@@ -346,34 +374,41 @@ static TCB* sched_queue_select(TCB* current)
 	return next_thread;
 }
 
-/***/
+/*
+*This function changes the priority of the thread that just called yield,
+*based on its current or last cause.
+*It returns the priority to be assingned for the that thread.
+*/
 static int set_next_priority(TCB* current_thread)
 {
 	int current_priority=current_thread->priority;
 
 	switch (current_thread->curr_cause) {
+		//Check if the thread quantum was over.
 		case SCHED_QUANTUM:
+		//if the thread is not already in the lowest priority
 			if(current_priority>0)
+			//decrement its priority
 				current_priority--;
 			break;
+		//Check for an I/O thread.
 		case SCHED_IO:
-			//check later just for priority++;
+			//change its priority to the highest possible
 			current_priority=PRIORITY_QUEUES-1;
 			break;
+		//Check for a thread that called yield inside a mutex lock.
 		case SCHED_MUTEX:
+			//if it was previously yielded for the same reason and its not already in the lowest priority queue
 			if(current_thread->last_cause==SCHED_MUTEX)
 				if(current_priority>0)
+				//decrement its priority
 					current_priority--;
 			break;
-		case SCHED_USER:
-			break;
-		case SCHED_IDLE:
-			current_priority=PRIORITY_QUEUES-1;
-			break;
+		//for every other cause keep the same priority.
 		default:
-			assert(0); /* prev->state should not be INIT or RUNNING ! */
+			assert(1);
 		}
-		return current_priority;
+	return current_priority;
 }
 
 
@@ -469,6 +504,7 @@ void yield(enum SCHED_CAUSE cause)
 	TCB* next = sched_queue_select(current);
 	assert(next != NULL);
 
+	//checking if we need to boost.
 	if(check_for_boost())
 		sched_boost();
 	/* Save the current TCB for the gain phase */

@@ -9,15 +9,22 @@
 
 #define PTCB_SIZE (sizeof(PTCB))
 
-
-int check_valid_Tid(PTCB* ptcb)
+/*
+*This function is used to check whether the specified ptcb is in the list of ptcbs of the process.
+*Returns 1 on success 0 on fail.
+*/
+int check_valid_PTCB(PTCB* ptcb)
 {
     PCB* curproc=CURPROC;
     return rlist_find(&curproc->ptcb_list,ptcb,NULL)!=NULL;
 }
 
 
-
+/*
+*This function is used to initialize the memory needed for a new ptcb 
+*as well as its member variables.
+*It returns the new ptcb.
+*/
 PTCB* initialize_PTCB(Task call, int argl, void * args )
 {
   //allocate size for the new ptcb
@@ -36,30 +43,29 @@ PTCB* initialize_PTCB(Task call, int argl, void * args )
   // Copy the arguments to new storage
   ptcb->argl=argl;
   if(args!=NULL) {
-    ptcb->args = xmalloc(sizeof(args));
     ptcb->args=args;
-
   }
   else
     ptcb->args=NULL;
 
   return ptcb;
 }
+
+
 /**
- * This function frees up the memory allocated for the ptcb block and its arguments
+ * This function frees up the memory allocated for the ptcb block and removes it from the ptcb_list of the process.
  */
 void release_PTCB(PTCB* ptcb)
 {
   rlist_remove(&ptcb->ptcb_list_node);
   if(ptcb->args) {
-      //free(ptcb->args);
       ptcb->args = NULL;
     }
   free(ptcb);
 }
 
 /**
- * This function frees up from the pcb all its ptcbs
+ * This function frees up all the ptcbs from the ptcb_list of the process if it's not already empty
  */
 void clean_process_PTCBs()
 {
@@ -73,14 +79,14 @@ void clean_process_PTCBs()
 }
 
 
-
+/*
+*This function takes care of all the necessery actions(cleanup,reparenting etc.) for the exit of a process.
+*/
 void process_cleanup()
 {
-
-
   PCB *curproc = CURPROC; 
   //clean up ptcbs
-    clean_process_PTCBs();
+  clean_process_PTCBs();
 
   /* Do all the other cleanup we want here, close files etc. */
   if(curproc->args) {
@@ -125,7 +131,11 @@ void process_cleanup()
   curproc->pstate = ZOMBIE;
 
 }
-
+/*
+*This is the function that each new tcb will execute.
+*We use it to assure that after the completion of the task specified 
+*by the ptcb the thread exits.
+*/
 void start_thread()
 {
 
@@ -159,6 +169,7 @@ Tid_t sys_CreateThread(Task task, int argl, void* args)
     rlist_push_front(&curproc->ptcb_list, &ptcb->ptcb_list_node);
     curproc->thread_count++; 
 
+    //wake up the new tcb
     wakeup(tcb);
 
     return (Tid_t) tcb->ptcb;
@@ -188,7 +199,7 @@ int sys_ThreadJoin(Tid_t tid, int* exitval)
   *- the tid corresponds to the current thread.
   *- the tid corresponds to a detached thread. 
   */
-  if(!check_valid_Tid(ptcb)||(sys_ThreadSelf()==tid)||ptcb->detached)
+  if(!check_valid_PTCB(ptcb)||(sys_ThreadSelf()==tid)||ptcb->detached)
     return -1;
   /**
    * The loop will break when the threads that called kernel_wait
@@ -229,7 +240,7 @@ int sys_ThreadDetach(Tid_t tid)
 {
   PTCB* ptcb=(PTCB*) tid;
   //check whether tid exits in pcb list of ptcbs or ptcb is exited
-	if(!check_valid_Tid(ptcb)||ptcb->exited)
+	if(!check_valid_PTCB(ptcb)||ptcb->exited)
     return -1;
 
   //flag ptcb as detached
@@ -251,12 +262,14 @@ void sys_ThreadExit(int exitval)
 
   TCB* curthread=CURTHREAD;
 
+  //change the exitval of the ptcb
   curthread->ptcb->exitval=exitval;
-
+  //make the exited flag of the ptcb true
   curthread->ptcb->exited=1;
-
+  //broadcast all threads that join this exiting thread, if any.
   kernel_broadcast(&curthread->ptcb->exit_cv);
   
+  //if the thread is detached then release its ptcb since none is going to join it.
   if(curthread->ptcb->detached)
     release_PTCB(curthread->ptcb);
 
@@ -265,11 +278,13 @@ void sys_ThreadExit(int exitval)
 
   PCB* curproc=CURPROC;
 
+  //if the last thread exits now make sure to cleanup the process
   if(curproc->thread_count<=1)
     process_cleanup();
     
   /* Bye-bye cruel world */
   
+  //decrement the number of active threads in the process
   curproc->thread_count--;
   kernel_sleep(EXITED, SCHED_USER);
 }

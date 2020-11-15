@@ -146,12 +146,6 @@ typedef struct thread_control_block {
  *
  ************************/
 
-/**Number of priority queues*/
-#define PRIORITY_QUEUES 100
-
-/**Number of yields called before each boost occurs*/
-#define BOOST_PERIOD 1200
-
 /** @brief Core control block.
 
   Per-core info in memory (basically scheduler-related). 
