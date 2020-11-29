@@ -195,8 +195,6 @@ int SymposiumOfProcesses(int argl, void* args)
 
 int PhilosopherThread(int i, void* symp)
 {
-  int bisias;
-  bisias=0;
 	SymposiumTable_philosopher((SymposiumTable*) symp, i);
 	return 0;
 }

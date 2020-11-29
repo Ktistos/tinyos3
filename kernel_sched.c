@@ -56,10 +56,10 @@ Mutex active_threads_spinlock = MUTEX_INIT;
 
 
 /**Number of priority queues*/
-#define PRIORITY_QUEUES 500
+#define PRIORITY_QUEUES 3
 
 /**Number of yields called before each boost occurs*/
-#define BOOST_PERIOD 5000
+#define BOOST_PERIOD 1200
 
 //#define MMAPPED_THREAD_MEM
 #ifdef MMAPPED_THREAD_MEM
