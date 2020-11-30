@@ -27,13 +27,14 @@ typedef struct pipe_control_block
 	/* read position of the pipe buffer */
 	int r_position;
 	
-	//refcount
 
 	/* pipe buffer */
 	char BUFFER[PIPE_BUFFER_SIZE];
 
-	/*number of elements in buffer*/
+	/* number of elements in buffer */
 	int nelem;
+
+
 } pipe_cb;
 
 /* Helper functions */
@@ -59,117 +60,182 @@ pipe_cb * initialize_pipe_cb()
 	return pipeCB;
 
 }
-
+/* This function is used to increment the read and write position in the of the pipe buffer
+*  It is used in the write_to_buffer and read_from_buffer functions.
+*/
 void increm_pos(int* position) 
 {
 	*position=(*position+1)%PIPE_BUFFER_SIZE;
 }
 
-
+/*
+*	This function is used to write characters into the pipe buffer
+*	from the buf string.
+*	
+*	It returns the number of characters succesfully written to the buffer.
+*	
+*	If the pipe buffer gets full before all characters of the buf string are written to 
+*	it stops and returns the number of sucessfully written chars.
+*/
 int write_to_buffer(pipe_cb * pipeCB, const char *buf, uint n)
 {
+	/* accessing pipe buffer and write position of the buffer from the pipe control block */
 	char* pipe_buffer=pipeCB->BUFFER;
 	int* w_pos=&pipeCB->w_position;
 
 	int count;
 	for(count=0; count<n; count++){
-
+		/* if the pipe buffer gets full stop the writting*/
 		if(pipeCB->nelem==PIPE_BUFFER_SIZE)
 			break;
 
 		pipe_buffer[*w_pos] = buf[count];
-		
+		/* increment the write position */
 		increm_pos(w_pos);
+		/* increase the number of elements in the buffer */
 		pipeCB->nelem++;
 
 	}
-
+	/* returning the number of successfully written chars */
 	return count;
 }
 
+/*
+*	This function is used to read characters from the pipe buffer
+*	and to store them to the buf string.
+*	
+*	It returns the number of characters succesfully read from the pipe.
+*/
 int read_from_buffer(pipe_cb* pipeCB, char *buf, uint n)
 {
+	/* accessing pipe buffer and read position of the buffer from the pipe control block */
 	char* pipe_buffer=pipeCB->BUFFER;
 	int* r_pos=&pipeCB->r_position;
+	
 	int count;
-
 	for(count=0; count<n; count++){
-
+		/* if the pipe buffer gets empty stop reading from it*/
 		if(pipeCB->nelem==0)
 			break;
 
 		buf[count]=pipe_buffer[*r_pos];
+		/* increment the read position */
 		increm_pos(r_pos);
+		/* decrease the number of elements in the buffer */
 		pipeCB->nelem--;
 	}	
 
+	/* returning the number of successfully read chars */
 	return count;
 
 }
 
+/* Pipe functionality operations */
+
+/* 	This function is used by sys_Write when the user writes to an fid corresponding to a pipe.
+*	It tries to write the buf string to the pipe.
+*	
+*	Returns the number of characters successfully read from the pipe or -1 the read end of the pipe has been closed
+*/
 int  pipe_write(void * pipecb_t, const char *buf, uint n)
 {
+	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) pipecb_t;
 
 	int count=0;
-
+	/* 	If the pipe is full then wait until someone reads from the read end and free up some space
+	*	Don't wait if the read end has been closed.
+	*/
 	while(pipeCB->nelem==PIPE_BUFFER_SIZE && pipeCB->reader)
 		kernel_wait(&pipeCB->has_space, SCHED_USER);
 
-	
+	/* If the read end of the pipe is closed then return error -1 */
 	if(!pipeCB->reader)
 		return -1;
 
+	/* Since we can write to buffer, write as many characters as possible from buf string to pipe */
 	count=write_to_buffer(pipeCB, buf,n);
 
+	/* wake up all the those who tried to read from the read end of the pipe it was empty. */
 	kernel_broadcast(&pipeCB->has_data);
 
+	/* return the number of characters successfully written in the pipe */
 	return count;
 
 }
 	
-
+/* 	This function is used by FCB_decref when the user calls sys_Close 
+*	and the fid for the specific FCB (which corresponds to the write end of the pipe).
+*	
+*	It wakes up every thread that was waiting for characters to be written on the pipe 
+*	since the write end closes and nobody can write on the pipe.
+*	
+*	If the read end of the pipe has been already closed then free the pipe control block.
+*/
 int  pipe_writer_close(void * _pipecb)
 {
+	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) _pipecb;
 
-
-	
+	/* Since the write end closes make it NULL on the pipe control block*/
 	pipeCB->writer=NULL;
 
+	/* wake up the threads waiting for the pipe to get full */
 	kernel_broadcast(&pipeCB->has_data);
 
+	/* if the read end has already been closed then free the pipe control block */
 	if(!pipeCB->reader)
 		 free(pipeCB);
 
 	return 0;
 }
 
+/* 	This function is used by sys_Read when the user writes to an fid corresponding to a pipe.
+*	It tries to read from the pipe and store the characters to buf argument.
+*	
+*	It returns the number of characters successfully read from the pipe.
+*/
 int  pipe_read(void * pipecb_t, char *buf, uint n)
 {
+	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) pipecb_t;
+	
 	int count=0;
 
+	/* If the pipe is empty then wait until someone writes to it */
 	while(pipeCB->nelem==0 && pipeCB->writer)
 		kernel_wait(&pipeCB->has_data, SCHED_USER);
 
-
+	/* Since we can read from the pipe, read as many characters as possible from the pipe and store them to buf */
 	count=read_from_buffer(pipeCB, buf,n);
 
+	/* wake up all the those who tried to write to the pipe and it was full . */
 	kernel_broadcast(&pipeCB->has_space);
 
+	/* return the number of characters successfully written in the pipe */
 	return count;
 }
 
-
+/* 	This function is used by FCB_decref when the user calls sys_Close 
+*	and the fid for the specific FCB (which corresponds to the read end of the pipe).
+*	
+*	It wakes up every thread that were waiting for the pipe to free up some space so they could write it 
+*	since the read end closes and nobody can read from the pipe.
+*	
+*	If the write end of the pipe has been already closed then free the pipe control block.
+*/
 int  pipe_reader_close(void * _pipecb)
 {
+	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) _pipecb;
 
+	/* Since the read end closes make it NULL on the pipe control block*/
 	pipeCB->reader=NULL;
 
+	/* wake up the threads waiting for the pipe to free some space */
 	kernel_broadcast(&pipeCB->has_space);
 
+	/* if the write end has already been closed then free the pipe control block */
 	if(!pipeCB->writer)
 		 free(pipeCB);
 
