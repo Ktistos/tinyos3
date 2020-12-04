@@ -1553,6 +1553,7 @@ TEST_SUITE(pipe_tests,
 void connect_sockets(Fid_t sock1, Fid_t lsock, Fid_t* sock2, port_t port)
 {
 	int accept_thread(int argl, void* args) {
+		
 		*sock2 = Accept(lsock);
 		ASSERT(*sock2 != NOFILE);
 		return 0;

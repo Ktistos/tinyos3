@@ -220,14 +220,14 @@ Fid_t sys_Accept(Fid_t lsock)
 	
 	SCB_incref(lsocket);
 
-	listener_socket listener= lsocket->listener_s;
+	listener_socket* listener= &lsocket->listener_s;
 
-	if (is_rlist_empty(&listener.queue))
-		kernel_wait(&listener.req_available,SCHED_USER);
+	if (is_rlist_empty(&listener->queue))
+		kernel_wait(&listener->req_available,SCHED_USER);
 	
 	if (lsocket->fcb)
 	{
-		request * req= rlist_pop_front(&listener.queue)->req;
+		request * req= rlist_pop_front(&listener->queue)->req;
 		req->admitted=1;
 		Fid_t sock_fid=sys_Socket(NOPORT);
 		if (sock_fid==NOFILE)
@@ -264,11 +264,11 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 	req->peer = socket; 
 
-	listener_socket listener= PORT_MAP[port]->listener_s;
+	listener_socket* listener=& PORT_MAP[port]->listener_s;
 
-	rlist_push_back(&listener.queue,&req->queue_node);
+	rlist_push_back(&listener->queue,&req->queue_node);
 
-	kernel_broadcast(&listener.req_available);
+	kernel_broadcast(&listener->req_available);
 
 	kernel_timedwait(&req->connected_cv,SCHED_USER,timeout);
 
