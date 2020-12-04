@@ -73,3 +73,11 @@ int  pipe_writer_close(void * _pipecb);
 *	If the write end of the pipe has been already closed then free the pipe control block.
 */
 int  pipe_reader_close(void * _pipecb);
+
+
+
+/* This function is used to allocate memory space for the 
+*  new pipe cb and to initialize its attributes.
+*  It returns a pointer to the newly made and initialized pipe cb.
+*/
+pipe_cb * initialize_pipe_cb();
