@@ -54,7 +54,7 @@ request * initialize_request()
 
 int check_legal_fid(Fid_t fid){
 
-	return !(fid<0 || fid>MAX_FILEID-1 || !CURPROC->FIDT[fid]); 
+	return (fid>=0 && fid<=MAX_FILEID-1 && CURPROC->FIDT[fid]!=NULL && CURPROC->FIDT[fid]->streamobj!=NULL); 
 }
 
 int check_legal_port(port_t port)
