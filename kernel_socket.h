@@ -1,6 +1,7 @@
 #include "util.h"
-#include "tinyos.h"
 #include "kernel_pipe.h"
+#include "tinyos.h"
+
 
 /**
   @brief Designate different origins of scheduler invocation.
@@ -8,6 +9,9 @@
   This is used in the scheduler heuristics to determine how to
   adjust the dynamic priority of the current thread.
  */
+
+typedef struct socket_control_block SCB;
+
 typedef enum SOCKET_TYPE {
 	SOCKET_LISTENER,
     SOCKET_UNBOUND,
@@ -22,6 +26,7 @@ typedef struct listener_socket
     CondVar req_available;
 } listener_socket;
 
+
 typedef struct peer_socket
 {
     SCB* peer;
@@ -32,12 +37,11 @@ typedef struct peer_socket
 
 } peer_socket;
 
-
 /* 
 *	Pipe control block
 *  	This structure holds all information pertaining to a pipe.
 */
-typedef struct socket_control_block
+struct socket_control_block
 {
 	uint refcount;
     
@@ -54,4 +58,9 @@ typedef struct socket_control_block
         peer_socket peer_s;
     };
     
-} SCB;
+};
+
+
+
+
+
