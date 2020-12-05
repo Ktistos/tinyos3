@@ -137,11 +137,13 @@ int socket_close(void* scb )
 	else if(socket->type==SOCKET_PEER)
 	{
 		peer_socket* psocket= &socket->peer_s;
-
-		pipe_writer_close(psocket->write_pipe);
-
-		pipe_reader_close(psocket->read_pipe);
-		
+		//check these conditions
+		if(psocket->write_pipe->writer!=NULL )
+			pipe_writer_close(psocket->write_pipe);
+		//check 
+		if(psocket->read_pipe->reader!=NULL )
+			pipe_reader_close(psocket->read_pipe);
+	
 	}
 	
 	SCB_decref(socket);
@@ -228,10 +230,11 @@ Fid_t sys_Accept(Fid_t lsock)
 	if (lsocket->fcb)
 	{
 		request * req= rlist_pop_front(&listener->queue)->req;
-		req->admitted=1;
 		Fid_t sock_fid=sys_Socket(NOPORT);
 		if (sock_fid==NOFILE)
 			return retval;
+
+		req->admitted=1;
 
 		SCB* psocket =(SCB*) CURPROC->FIDT[sock_fid]->streamobj; 
 
