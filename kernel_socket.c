@@ -301,16 +301,16 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 	{
 	case SHUTDOWN_READ:
 		
-		retval= pipe_reader_close(&socket->peer_s.read_pipe);
+		retval= pipe_reader_close(socket->peer_s.read_pipe);
 
 		break;
 	case SHUTDOWN_WRITE:
-		retval = pipe_writer_close(&socket->peer_s.write_pipe);
+		retval = pipe_writer_close(socket->peer_s.write_pipe);
 
 		break;
 	case SHUTDOWN_BOTH:
-		retval = pipe_writer_close(&socket->peer_s.write_pipe);
-		retval= pipe_reader_close(&socket->peer_s.read_pipe);
+		retval = pipe_writer_close(socket->peer_s.write_pipe);
+		retval= pipe_reader_close(socket->peer_s.read_pipe);
 		break;
 
 	default:
