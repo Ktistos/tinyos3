@@ -106,9 +106,6 @@ int  pipe_write(void * pipecb_t, const char *buf, uint n)
 	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) pipecb_t;
 
-	if(pipeCB->writer==NULL)
-		return -1;
-
 	int count=0;
 	/* 	If the pipe is full then wait until someone reads from the read end and free up some space
 	*	Don't wait if the read end has been closed.
@@ -156,9 +153,6 @@ int  pipe_read(void * pipecb_t, char *buf, uint n)
 	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) pipecb_t;
 	
-	if(pipeCB->reader==NULL)
-		return -1;
-
 	int count=0;
 
 	/* If the pipe is empty then wait until someone writes to it */

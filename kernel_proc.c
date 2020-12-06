@@ -309,8 +309,5 @@ void sys_Exit(int exitval)
 
 
 
-Fid_t sys_OpenInfo()
-{
-	return NOFILE;
-}
+
 

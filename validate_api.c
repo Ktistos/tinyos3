@@ -1412,7 +1412,7 @@ int data_producer(int argl, void* args)
 	Close(0);
 
 	char buffer[32768];
-
+	
 	while(nbytes>0) {
 		unsigned int n = (nbytes<32768) ? nbytes : 32768;
 		int rc = Write(1, buffer, n);
@@ -1433,7 +1433,6 @@ int data_consumer(int argl, void* args)
 
 	char buffer[16384];
 	int count = 0;
-
 	int rc = 1;
 	while(rc) {
 		rc = Read(0, buffer, 16384);
@@ -1470,6 +1469,7 @@ BOOT_TEST(test_pipe_single_producer,
 	}
 
 	int N = 10000000;
+	
 	ASSERT(Exec(data_consumer, sizeof(N), &N)!=NOPROC);
 	ASSERT(Exec(data_producer, sizeof(N), &N)!=NOPROC);
 

@@ -108,14 +108,14 @@ int socket_write(void * scb, const char *buf, uint n)
 {
 	SCB* socket= (SCB*) scb;
 	
-	return socket->type==SOCKET_PEER ? pipe_write( socket->peer_s.write_pipe,buf,n) : -1;
+	return socket->type==SOCKET_PEER && socket->peer_s.write_pipe->writer ? pipe_write( socket->peer_s.write_pipe,buf,n) : -1;
 }
 
 int socket_read(void * scb, char *buf, uint n)
 {
 	SCB* socket= (SCB*) scb;
 
-	return socket->type==SOCKET_PEER ? pipe_read( socket->peer_s.read_pipe,buf,n) : -1;
+	return socket->type==SOCKET_PEER && socket->peer_s.read_pipe->reader ? pipe_read( socket->peer_s.read_pipe,buf,n) : -1;
 }
 
 int socket_close(void* scb )
