@@ -119,6 +119,38 @@ int socket_read(void * scb, char *buf, uint n)
 	return socket->type==SOCKET_PEER && socket->peer_s.read_pipe->reader ? pipe_read( socket->peer_s.read_pipe,buf,n) : -1;
 }
 
+
+int  socket_writer_close(peer_socket* psocket)
+{
+	int pipe_freed= psocket->write_pipe->reader==NULL;
+
+	int retval=pipe_writer_close(psocket->write_pipe);
+			
+		if(pipe_freed)
+			{
+				psocket->write_pipe=NULL;
+				psocket->peer->peer_s.read_pipe=NULL;
+			}
+
+	return retval;
+}
+
+
+int socket_reader_close(peer_socket* psocket)
+{
+	int pipe_freed= psocket->read_pipe->writer==NULL;
+	int retval=pipe_reader_close(psocket->read_pipe);
+		if(pipe_freed)
+		{
+			psocket->read_pipe=NULL;
+			psocket->peer->peer_s.write_pipe=NULL;
+		}
+
+	return retval;
+
+}
+
+
 int socket_close(void* scb )
 {
 	SCB* socket= (SCB*) scb;
@@ -141,25 +173,13 @@ int socket_close(void* scb )
 		//check these conditions
 		if(psocket->write_pipe!=NULL && psocket->write_pipe->writer!=NULL )
 		{
-			int pipe_freed= psocket->write_pipe->reader==NULL;
-			pipe_writer_close(psocket->write_pipe);
-			
-			if(pipe_freed)
-			{
-				socket->peer_s.write_pipe=NULL;
-				socket->peer_s.peer->peer_s.read_pipe=NULL;
-			}
+			socket_writer_close(psocket);
 
 		}
 		//check 
 		if(psocket->read_pipe!=NULL && psocket->read_pipe->reader!=NULL ){
-			int pipe_freed= psocket->read_pipe->writer==NULL;
-			pipe_reader_close(psocket->read_pipe);
-			if(pipe_freed)
-			{
-				socket->peer_s.read_pipe=NULL;
-				socket->peer_s.peer->peer_s.write_pipe=NULL;
-			}
+			
+			socket_reader_close(psocket);
 		}
 	}
 	
@@ -305,7 +325,6 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 int sys_ShutDown(Fid_t sock, shutdown_mode how)
 {
 	int retval=-1;
-	int pipe_freed;
 
 	if (!check_legal_fid(sock) )
 		return retval;
@@ -320,29 +339,17 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 	{
 	case SHUTDOWN_READ:
 		if(socket->peer_s.read_pipe){
-			pipe_freed= socket->peer_s.read_pipe->writer==NULL;
-			pipe_reader_close(socket->peer_s.read_pipe);
-			if(pipe_freed)
-			{
-				socket->peer_s.read_pipe=NULL;
-				socket->peer_s.peer->peer_s.write_pipe=NULL;
-			}
+			socket_reader_close(&socket->peer_s);
 		}
 		break;
 	case SHUTDOWN_WRITE:
 		if(socket->peer_s.write_pipe){
-			pipe_freed= socket->peer_s.write_pipe->reader==NULL;
-			pipe_writer_close(socket->peer_s.write_pipe);
-			if(pipe_freed)
-			{
-				socket->peer_s.write_pipe=NULL;
-				socket->peer_s.peer->peer_s.read_pipe=NULL;
-			}
+			socket_writer_close(&socket->peer_s);
 		}
 		break;
 	case SHUTDOWN_BOTH:
-		retval = sys_ShutDown(sock,SHUTDOWN_READ);
-		retval= sys_ShutDown(sock,SHUTDOWN_WRITE);
+		retval = socket_reader_close(&socket->peer_s);
+		retval= socket_writer_close(&socket->peer_s);
 		break;
 
 	default:
