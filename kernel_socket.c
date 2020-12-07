@@ -62,6 +62,7 @@ int check_legal_port(port_t port)
 	return !(port<NOPORT || port>MAX_PORT);
 }
 
+
 void SCB_incref(SCB* scb)
 {
 	scb->refcount++;
@@ -138,12 +139,28 @@ int socket_close(void* scb )
 	{
 		peer_socket* psocket= &socket->peer_s;
 		//check these conditions
-		if(psocket->write_pipe->writer!=NULL )
+		if(psocket->write_pipe!=NULL && psocket->write_pipe->writer!=NULL )
+		{
+			int pipe_freed= psocket->write_pipe->reader==NULL;
 			pipe_writer_close(psocket->write_pipe);
+			
+			if(pipe_freed)
+			{
+				socket->peer_s.write_pipe=NULL;
+				socket->peer_s.peer->peer_s.read_pipe=NULL;
+			}
+
+		}
 		//check 
-		if(psocket->read_pipe->reader!=NULL )
+		if(psocket->read_pipe!=NULL && psocket->read_pipe->reader!=NULL ){
+			int pipe_freed= psocket->read_pipe->writer==NULL;
 			pipe_reader_close(psocket->read_pipe);
-	
+			if(pipe_freed)
+			{
+				socket->peer_s.read_pipe=NULL;
+				socket->peer_s.peer->peer_s.write_pipe=NULL;
+			}
+		}
 	}
 	
 	SCB_decref(socket);
@@ -288,6 +305,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 int sys_ShutDown(Fid_t sock, shutdown_mode how)
 {
 	int retval=-1;
+	int pipe_freed;
 
 	if (!check_legal_fid(sock) )
 		return retval;
@@ -297,20 +315,34 @@ int sys_ShutDown(Fid_t sock, shutdown_mode how)
 		return retval;
 	
 
+
 	switch (how)
 	{
 	case SHUTDOWN_READ:
-		
-		retval= pipe_reader_close(socket->peer_s.read_pipe);
-
+		if(socket->peer_s.read_pipe){
+			pipe_freed= socket->peer_s.read_pipe->writer==NULL;
+			pipe_reader_close(socket->peer_s.read_pipe);
+			if(pipe_freed)
+			{
+				socket->peer_s.read_pipe=NULL;
+				socket->peer_s.peer->peer_s.write_pipe=NULL;
+			}
+		}
 		break;
 	case SHUTDOWN_WRITE:
-		retval = pipe_writer_close(socket->peer_s.write_pipe);
-
+		if(socket->peer_s.write_pipe){
+			pipe_freed= socket->peer_s.write_pipe->reader==NULL;
+			pipe_writer_close(socket->peer_s.write_pipe);
+			if(pipe_freed)
+			{
+				socket->peer_s.write_pipe=NULL;
+				socket->peer_s.peer->peer_s.read_pipe=NULL;
+			}
+		}
 		break;
 	case SHUTDOWN_BOTH:
-		retval = pipe_writer_close(socket->peer_s.write_pipe);
-		retval= pipe_reader_close(socket->peer_s.read_pipe);
+		retval = sys_ShutDown(sock,SHUTDOWN_READ);
+		retval= sys_ShutDown(sock,SHUTDOWN_WRITE);
 		break;
 
 	default:
