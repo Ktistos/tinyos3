@@ -25,7 +25,6 @@ typedef struct pipe_control_block
 	/* read position of the pipe buffer */
 	int r_position;
 	
-
 	/* pipe buffer */
 	char BUFFER[PIPE_BUFFER_SIZE];
 

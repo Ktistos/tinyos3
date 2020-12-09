@@ -249,7 +249,7 @@ Fid_t sys_Accept(Fid_t lsock)
 	if (is_rlist_empty(&listener->queue))
 		kernel_wait(&listener->req_available,SCHED_USER);
 	
-	if (lsocket->fcb)
+	if (PORT_MAP[lsocket->port])
 	{
 		request * req= rlist_pop_front(&listener->queue)->req;
 		Fid_t sock_fid=sys_Socket(NOPORT);
@@ -295,7 +295,7 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 	kernel_broadcast(&listener->req_available);
 
-	kernel_timedwait(&req->connected_cv,SCHED_USER,timeout);
+	kernel_timedwait(&req->connected_cv,SCHED_USER,timeout*1000);
 
 	int isAdmitted=req->admitted;
 
