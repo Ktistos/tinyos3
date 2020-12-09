@@ -6,8 +6,6 @@
 #include "kernel_socket.h"
 
 
-
-
 SCB* PORT_MAP[MAX_PORT+1];
 
 
@@ -109,44 +107,35 @@ int socket_write(void * scb, const char *buf, uint n)
 {
 	SCB* socket= (SCB*) scb;
 	
-	return socket->type==SOCKET_PEER && socket->peer_s.write_pipe->writer ? pipe_write( socket->peer_s.write_pipe,buf,n) : -1;
+	return socket->type==SOCKET_PEER && socket->peer_s.write_pipe && socket->peer_s.write_pipe->writer ? pipe_write( socket->peer_s.write_pipe,buf,n) : -1;
 }
 
 int socket_read(void * scb, char *buf, uint n)
 {
 	SCB* socket= (SCB*) scb;
 
-	return socket->type==SOCKET_PEER && socket->peer_s.read_pipe->reader ? pipe_read( socket->peer_s.read_pipe,buf,n) : -1;
+	return socket->type==SOCKET_PEER && socket->peer_s.read_pipe && socket->peer_s.read_pipe->reader ? pipe_read( socket->peer_s.read_pipe,buf,n) : -1;
 }
 
 
 int  socket_writer_close(peer_socket* psocket)
 {
-	int pipe_freed= psocket->write_pipe->reader==NULL;
+	if(psocket->write_pipe){
+		pipe_writer_close(psocket->write_pipe);
+		psocket->write_pipe=NULL;
+	}
 
-	int retval=pipe_writer_close(psocket->write_pipe);
-			
-		if(pipe_freed)
-			{
-				psocket->write_pipe=NULL;
-				psocket->peer->peer_s.read_pipe=NULL;
-			}
-
-	return retval;
+	return 0;
 }
 
 
 int socket_reader_close(peer_socket* psocket)
 {
-	int pipe_freed= psocket->read_pipe->writer==NULL;
-	int retval=pipe_reader_close(psocket->read_pipe);
-		if(pipe_freed)
-		{
-			psocket->read_pipe=NULL;
-			psocket->peer->peer_s.write_pipe=NULL;
-		}
-
-	return retval;
+	if(psocket->read_pipe){
+		pipe_reader_close(psocket->read_pipe);
+		psocket->read_pipe=NULL;
+	}	
+	return 0;
 
 }
 
@@ -163,24 +152,20 @@ int socket_close(void* scb )
 
 		PORT_MAP[socket->port]=NULL;
 		kernel_broadcast(&socket->listener_s.req_available);
-		//signal everybody else
+
 		while (!is_rlist_empty(& listener->queue))
-			rlist_pop_front(& listener->queue);
+		{
+			request* req=rlist_pop_front(& listener->queue)->req;
+			kernel_signal(&req->connected_cv);
+		}
 	}
 	else if(socket->type==SOCKET_PEER)
 	{
 		peer_socket* psocket= &socket->peer_s;
-		//check these conditions
-		if(psocket->write_pipe!=NULL && psocket->write_pipe->writer!=NULL )
-		{
-			socket_writer_close(psocket);
-
-		}
-		//check 
-		if(psocket->read_pipe!=NULL && psocket->read_pipe->reader!=NULL ){
-			
+		
+			socket_writer_close(psocket);			
 			socket_reader_close(psocket);
-		}
+		
 	}
 	
 	SCB_decref(socket);
@@ -314,6 +299,8 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 
 	int isAdmitted=req->admitted;
 
+	rlist_remove(&req->queue_node);
+
 	free(req);
 
 	SCB_decref(socket);
@@ -325,34 +312,27 @@ int sys_Connect(Fid_t sock, port_t port, timeout_t timeout)
 int sys_ShutDown(Fid_t sock, shutdown_mode how)
 {
 	int retval=-1;
-
 	if (!check_legal_fid(sock) )
 		return retval;
-
 	SCB* socket =(SCB*) CURPROC->FIDT[sock]->streamobj; 
 	if (socket->type!= SOCKET_PEER)
-		return retval;
-	
-
-
+		return retval;	
+	retval=0;
 	switch (how)
 	{
 	case SHUTDOWN_READ:
-		if(socket->peer_s.read_pipe){
-			socket_reader_close(&socket->peer_s);
-		}
+		socket_reader_close(&socket->peer_s);
 		break;
 	case SHUTDOWN_WRITE:
-		if(socket->peer_s.write_pipe){
-			socket_writer_close(&socket->peer_s);
-		}
+		socket_writer_close(&socket->peer_s);
+
 		break;
 	case SHUTDOWN_BOTH:
-		retval = socket_reader_close(&socket->peer_s);
-		retval= socket_writer_close(&socket->peer_s);
+		socket_reader_close(&socket->peer_s);
+		socket_writer_close(&socket->peer_s);
 		break;
-
 	default:
+		retval=-1;
 		break;
 	}
 	return retval;
