@@ -297,12 +297,12 @@ Pid_t sys_WaitChild(Pid_t cpid, int* status)
 }
 void sys_Exit(int exitval)
 {
+  CURPROC->exitval=exitval;
   /* Right here, we must check that we are not the boot task. If we are, 
      we must wait until all processes exit. */
   if(sys_GetPid()==1) {
     while(sys_WaitChild(NOPROC,NULL)!=NOPROC);
   }
-  CURPROC->exitval=exitval;
   sys_ThreadExit(exitval);
   
 }

@@ -50,19 +50,21 @@ int write_to_buffer(pipe_cb * pipeCB, const char *buf, uint n)
 {
 	/* accessing pipe buffer and write position of the buffer from the pipe control block */
 	char* pipe_buffer=pipeCB->BUFFER;
-	int* w_pos=&pipeCB->w_position;
-
-	int count;
+	int w_pos=pipeCB->w_position;
+	int count=0;
 	for(count=0; count<n; count++){
 		/* if the pipe buffer gets full stop the writting*/
-		if(pipeCB->nelem==PIPE_BUFFER_SIZE)
-			break;
+//		if(count == PIPE_BUFFER_SIZE) {
+//			break;
+//		}
 
-		pipe_buffer[*w_pos] = buf[count];
+		pipe_buffer[w_pos] = buf[count];
 		/* increment the write position */
-		increm_pos(w_pos);
+		//increm_pos(w_pos);
+		w_pos = (w_pos+1)%PIPE_BUFFER_SIZE;
 		/* increase the number of elements in the buffer */
-		pipeCB->nelem++;
+		//pipeCB->nelem++;
+
 
 	}
 	/* returning the number of successfully written chars */
@@ -79,19 +81,20 @@ int read_from_buffer(pipe_cb* pipeCB, char *buf, uint n)
 {
 	/* accessing pipe buffer and read position of the buffer from the pipe control block */
 	char* pipe_buffer=pipeCB->BUFFER;
-	int* r_pos=&pipeCB->r_position;
-	
-	int count;
+	int r_pos=pipeCB->r_position;
+	int count=0;
 	for(count=0; count<n; count++){
 		/* if the pipe buffer gets empty stop reading from it*/
-		if(pipeCB->nelem==0)
-			break;
+//		if(count == PIPE_BUFFER_SIZE) {
+//			break;
+//		}
 
-		buf[count]=pipe_buffer[*r_pos];
+		buf[count]=pipe_buffer[r_pos];
 		/* increment the read position */
-		increm_pos(r_pos);
+		//increm_pos(r_pos);
+		r_pos = (r_pos+1)%PIPE_BUFFER_SIZE;
 		/* decrease the number of elements in the buffer */
-		pipeCB->nelem--;
+		//pipeCB->nelem--;
 	}	
 
 	/* returning the number of successfully read chars */
@@ -106,19 +109,36 @@ int  pipe_write(void * pipecb_t, const char *buf, uint n)
 	/* access the pipe control block */
 	pipe_cb * pipeCB = (pipe_cb*) pipecb_t;
 
+	if(!pipeCB->reader)
+		return -1;
+	if (n == 0) return 0;
+
 	int count=0;
 	/* 	If the pipe is full then wait until someone reads from the read end and free up some space
 	*	Don't wait if the read end has been closed.
 	*/
-	while(pipeCB->nelem==PIPE_BUFFER_SIZE && pipeCB->reader)
-		kernel_wait(&pipeCB->has_space, SCHED_USER);
+	while(pipeCB->nelem==PIPE_BUFFER_SIZE && pipeCB->reader) {
+	        kernel_broadcast(&pipeCB->has_data);
+		kernel_wait(&pipeCB->has_space, SCHED_PIPE);
+	}
 
 	/* If the read end of the pipe is closed then return error -1 */
 	if(!pipeCB->reader)
 		return -1;
 
+	int bytes_to_write;
+
+	if (n < PIPE_BUFFER_SIZE - pipeCB->nelem) {
+    	  bytes_to_write = n;
+
+    	} else {
+    	  bytes_to_write = PIPE_BUFFER_SIZE - pipeCB->nelem;
+	}
+
 	/* Since we can write to buffer, write as many characters as possible from buf string to pipe */
-	count=write_to_buffer(pipeCB, buf,n);
+	count=write_to_buffer(pipeCB, buf, bytes_to_write);
+	pipeCB->nelem += count;
+	pipeCB->w_position = (pipeCB->w_position+count)%PIPE_BUFFER_SIZE;
 
 	/* wake up all the those who tried to read from the read end of the pipe it was empty. */
 	kernel_broadcast(&pipeCB->has_data);
@@ -156,11 +176,24 @@ int  pipe_read(void * pipecb_t, char *buf, uint n)
 	int count=0;
 
 	/* If the pipe is empty then wait until someone writes to it */
-	while(pipeCB->nelem==0 && pipeCB->writer)
-		kernel_wait(&pipeCB->has_data, SCHED_USER);
+	while(pipeCB->nelem==0 && pipeCB->writer) {
+		kernel_broadcast(&pipeCB->has_space);
+		kernel_wait(&pipeCB->has_data, SCHED_PIPE);
+	}
 
+	int bytes_to_read;
+
+	if (n < pipeCB->nelem) {
+    		bytes_to_read = n;
+
+    	} else {
+      		bytes_to_read = pipeCB->nelem;
+    	}
+	
 	/* Since we can read from the pipe, read as many characters as possible from the pipe and store them to buf */
-	count=read_from_buffer(pipeCB, buf,n);
+	count=read_from_buffer(pipeCB, buf, bytes_to_read);
+	pipeCB->nelem -= count;
+	pipeCB->r_position = (pipeCB->r_position+count)%PIPE_BUFFER_SIZE;
 
 	/* wake up all the those who tried to write to the pipe and it was full . */
 	kernel_broadcast(&pipeCB->has_space);

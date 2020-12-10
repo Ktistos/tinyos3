@@ -2,7 +2,7 @@
 #include "kernel_streams.h"
 
 /* The size of the pipe buffer */
-#define PIPE_BUFFER_SIZE 1024
+#define PIPE_BUFFER_SIZE 8192
 
 /* 
 *	Pipe control block
